@@ -1,0 +1,2 @@
+# shopCalc
+shop calculator
