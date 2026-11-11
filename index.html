@@ -340,15 +340,15 @@ function tokenize(s){
   while (i < s.length){
     const c = s[i];
     if (/\s/.test(c)){ i++; continue; }
-    let m = s.slice(i).match(/^(\d+(?:\.\d+)?|\.\d+)(?:\/(\d+))?/);
+    let m = s.slice(i).match(/^(\d+(?:\.\d+)?|\.\d+)(?:\/(\d+))?/); const p0 = i;
     if (m){
       let v = m[2] ? parseFloat(m[1]) / parseFloat(m[2]) : parseFloat(m[1]); i += m[0].length;
       if (!m[2] && !m[1].includes('.')){ const r = s.slice(i).match(/^\s+(\d+)\/(\d+)/); if (r){ v += parseFloat(r[1]) / parseFloat(r[2]); i += r[0].length; } }
-      out.push({t:'n', v}); continue;
+      out.push({t:'n', v, p:p0}); continue;
     }
     m = s.slice(i).match(/^(mm|cm|ft|in|yd|m)\b/) || s.slice(i).match(/^['"]/);
-    if (m){ out.push({t:'u', v:m[0]}); i += m[0].length; continue; }
-    if ('+-*÷()'.includes(c)){ out.push({t:'o', v:c}); i++; continue; }
+    if (m){ out.push({t:'u', v:m[0], p:i}); i += m[0].length; continue; }
+    if ('+-*÷()'.includes(c)){ out.push({t:'o', v:c, p:i}); i++; continue; }
     throw new Error('errNum');
   }
   return out;
@@ -393,7 +393,25 @@ function show(r){ // -> {main, conv:[[key,text]]}
 }
 
 /* ---------- calculator UI ---------- */
-const expr = $('expr'); let tapeData = store.get('tape', []), last = null, convSel = null;
+const expr = $('expr'); let tapeData = store.get('tape', []), last = null, convSel = null, shown = null, repOp = null;
+const OPSYM = {'+':'+', '-':'−', '*':'×', '÷':'÷'};
+// the result left on the display after "=" is used at full precision (not the rounded text)
+function subst(s){ if (shown && last && s.startsWith(shown)) s = 'ans ' + s.slice(shown.length); return s.replace(/\bans\b/gi, last ? `(${last.v}${last.d === 1 ? '"' : ''})` : '0'); }
+function combine(a, op, b){
+  const bare = x => x.d === 0 ? {v:x.v * U[P.bare], d:1} : x;
+  if (op === '+' || op === '-'){ if (a.d === 0 && b.d === 1) a = bare(a); if (b.d === 0 && a.d === 1) b = bare(b); if (a.d !== b.d) throw new Error('errDim'); return {v:a.v + (op === '+' ? 1 : -1) * b.v, d:a.d}; }
+  if (op === '*') return {v:a.v * b.v, d:a.d + b.d};
+  if (!b.v) throw new Error('errDiv'); return {v:a.v / b.v, d:a.d - b.d};
+}
+function lastOp(str){ // last top-level operation and its right-hand value, for repeated "="
+  const ps = prep(str), tk = tokenize(ps); let depth = 0, hit = null;
+  tk.forEach((k, i) => { if (k.v === '(') depth++; else if (k.v === ')') depth--;
+    else if (!depth && k.t === 'o' && '+-*÷'.includes(k.v) && i > 0 && !(tk[i - 1].t === 'o' && tk[i - 1].v !== ')')) hit = k; });
+  if (!hit) return null;
+  try { return {op:hit.v, b:parse(ps.slice(hit.p + 1))}; } catch(e){ return null; }
+}
+const resText = r => r.d === 1 ? L(r.v) : r.d === 0 ? String(+r.v.toFixed(6)) : show(r).main;
+const bText = b => b.d === 1 ? L(b.v) : String(+b.v.toFixed(6));
 const KEYS = [['C','fn','clr'],['(','op'],[')','op'],['⌫','fn','bk'],['÷','op'],
   ['7'],['8'],['9'],["Pie '",'u',"' "],['×','op',' × '],
   ['4'],['5'],['6'],['Pulg"','u','" '],['−','op',' - '],
@@ -403,26 +421,42 @@ const KEYS = [['C','fn','clr'],['(','op'],[')','op'],['⌫','fn','bk'],['÷','op
 function renderKeys(){
   $('keys').innerHTML = KEYS.map(([l, c, v]) => `<button type="button" class="${c || ''}" data-v="${(v ?? l).replace(/"/g,'&quot;')}">${P.lang === 'en' ? l.replace('Pie','Ft').replace('Pulg','In').replace('esp','spc') : l}</button>`).join('');
 }
-function insert(s){ const a = expr.selectionStart ?? expr.value.length, b = expr.selectionEnd ?? a; expr.value = expr.value.slice(0, a) + s + expr.value.slice(b); const c = a + s.length; expr.setSelectionRange(c, c); live(); }
+function insert(s){ if (shown && expr.value.trim() === shown && /^[\d.(]/.test(s)){ expr.value = ''; shown = null; repOp = null; } const a = expr.selectionStart ?? expr.value.length, b = expr.selectionEnd ?? a; expr.value = expr.value.slice(0, a) + s + expr.value.slice(b); const c = a + s.length; expr.setSelectionRange(c, c); live(); }
 function live(){
   const s = expr.value.trim(); $('err').textContent = '';
   if (!s){ $('res').textContent = '—'; $('conv').innerHTML = ''; return null; }
-  try { const r = parse(s.replace(/\bans\b/gi, last ? `(${last.v}${last.d === 1 ? '"' : ''})` : '0')); const o = show(r);
+  try { const r = parse(subst(s)); const o = show(r);
     $('res').textContent = convSel && r.d === 1 ? L(r.v, convSel) : o.main;
     $('conv').innerHTML = o.conv.map(([k, x]) => `<button type="button" data-k="${k}" aria-pressed="${k && (convSel || P.fmt) === k}">${x}</button>`).join('');
     return r;
   } catch(e){ $('res').textContent = '…'; $('err').textContent = t(e.message) || t('errNum'); $('conv').innerHTML = ''; return null; }
 }
 function equals(){
-  const r = live(); if (!r) return;
-  last = r; tapeData.unshift({e:expr.value.trim(), v:r.v, d:r.d}); tapeData = tapeData.slice(0, 60); store.set('tape', tapeData); renderTape();
+  const s = expr.value.trim(); let r, label;
+  try {
+    const tail = shown && s.startsWith(shown) ? s.slice(shown.length).trim() : null;
+    if (tail === '' && repOp){                                  // = = = repeats the last operation
+      r = combine(last, repOp.op, repOp.b); label = `${shown} ${OPSYM[repOp.op]} ${bText(repOp.b)}`;
+    } else if (tail != null && /^[+\-*×÷−xX]$/.test(tail)){     // 20 + = = adds 20 each time
+      const op = {'×':'*', 'x':'*', 'X':'*', '−':'-'}[tail] || tail; repOp = {op, b:last};
+      r = combine(last, op, last); label = `${shown} ${OPSYM[op]} ${shown}`;
+    } else if (/[+\-*×÷−xX]$/.test(s) && !/[+\-*×÷−xX]\s*[+\-*×÷−xX]$/.test(s)){   // 1 1/2" + = = adds 1 1/2" each time
+      const opc = s.slice(-1), op = {'×':'*', 'x':'*', 'X':'*', '−':'-'}[opc] || opc, base = s.slice(0, -1).trim();
+      const a0 = parse(subst(base)); repOp = {op, b:a0}; r = combine(a0, op, a0); label = `${base} ${OPSYM[op]} ${bText(a0)}`;
+    } else {
+      r = live(); if (!r) return; label = s;
+      repOp = lastOp(subst(s));
+    }
+  } catch(e){ $('err').textContent = t(e.message) || t('errNum'); return; }
+  last = r; tapeData.unshift({e:label, v:r.v, d:r.d}); tapeData = tapeData.slice(0, 60); store.set('tape', tapeData); renderTape();
+  shown = resText(r); expr.value = shown; live(); const n = expr.value.length; try { expr.setSelectionRange(n, n); } catch(e){}
 }
 function renderTape(){
   $('tapeList').innerHTML = tapeData.map((x, i) => `<li data-i="${i}" tabindex="0"><span>${x.e.replace(/</g,'&lt;')}</span><span>${show(x).main}</span></li>`).join('') || `<li style="cursor:default"><span>—</span><span></span></li>`;
 }
 $('keys').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v;
-  if (v === 'clr'){ expr.value = ''; convSel = null; live(); }
+  if (v === 'clr'){ expr.value = ''; convSel = null; shown = null; repOp = null; live(); }
   else if (v === 'bk'){ const a = expr.selectionStart ?? expr.value.length; if (a > 0){ expr.value = expr.value.slice(0, a - 1) + expr.value.slice(a); expr.setSelectionRange(a - 1, a - 1); live(); } }
   else if (v === 'eq') equals();
   else if (v === 'ans') insert('ans ');
