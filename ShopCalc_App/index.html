@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1d1f22">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>GMC Shop Calculator</title>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}</style>
+</head>
+<body>
+
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one working column like a jobsite calculator — LCD display on top, tabbed tools, keypad; widens to two panes on desktop. Tape-measure yellow is the only accent. */
+:root{
+  --bg:#e9e8e3; --panel:#f7f6f2; --ink:#1d1f22; --muted:#5d6168; --line:#cfcdc5;
+  --lcd:#1f2a24; --lcd-ink:#d9f2c4; --lcd-dim:#86a07a;
+  --tape:#f2c230; --tape-ink:#1d1f22; --steel:#3c4148; --steel-ink:#f3f3f1;
+  --ok:#2f7d4f; --bad:#b4372b; --warn:#a86a00;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-num:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#16181b; --panel:#202328; --ink:#ecebe6; --muted:#a3a7ad; --line:#353a41;
+  --lcd:#0f1712; --lcd-ink:#c8f0a8; --lcd-dim:#6f8d64; --steel:#4a5059; --steel-ink:#f3f3f1;
+  --ok:#5cc086; --bad:#ff7a6b; --warn:#f0b14a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#16181b; --panel:#202328; --ink:#ecebe6; --muted:#a3a7ad; --line:#353a41;
+  --lcd:#0f1712; --lcd-ink:#c8f0a8; --lcd-dim:#6f8d64; --steel:#4a5059; --steel-ink:#f3f3f1;
+  --ok:#5cc086; --bad:#ff7a6b; --warn:#f0b14a; color-scheme:dark}
+html,body{background:var(--bg)}
+[hidden]{display:none!important}
+*,*::before,*::after{box-sizing:border-box}
+body{color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 28px}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:28px;letter-spacing:.5px;margin:0;text-transform:uppercase}
+.brand .tag{font-family:var(--f-display);font-size:15px;background:var(--tape);color:var(--tape-ink);padding:1px 8px;border-radius:3px;letter-spacing:.6px;text-transform:uppercase}
+.lang{display:flex;gap:4px}
+.lang button{font:600 12px var(--f-body);border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:5px 9px;border-radius:6px;cursor:pointer}
+.lang button[aria-pressed="true"]{background:var(--steel);color:var(--steel-ink);border-color:var(--steel)}
+nav.tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{flex:1 0 auto;font-family:var(--f-display);font-size:17px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  border:0;background:transparent;color:var(--muted);padding:8px 12px;border-bottom:3px solid transparent;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--tape)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--tape);outline-offset:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
+@media (min-width:860px){.grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+/* LCD */
+.lcd{background:var(--lcd);color:var(--lcd-ink);border-radius:10px;padding:12px 14px;font-family:var(--f-num);display:grid;gap:6px;box-shadow:inset 0 2px 8px rgba(0,0,0,.35)}
+.lcd input{width:100%;background:transparent;border:0;color:var(--lcd-dim);font:400 16px var(--f-num);text-align:right;padding:0}
+.lcd .res{font-size:clamp(26px,7vw,40px);font-weight:600;text-align:right;min-height:1.2em;overflow-x:auto;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lcd .err{color:#ff9d8f;font-size:13px;text-align:right;min-height:1em;font-family:var(--f-body)}
+.conv{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.conv button{font:400 12.5px var(--f-num);background:rgba(255,255,255,.06);color:var(--lcd-ink);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:3px 7px;cursor:pointer}
+.conv button[aria-pressed="true"]{background:var(--tape);color:var(--tape-ink);border-color:var(--tape)}
+/* keypad */
+.keys{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px}
+.keys button{font:600 19px var(--f-body);min-height:50px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;touch-action:manipulation}
+.keys button:active{transform:translateY(1px)}
+.keys .u{background:var(--steel);color:var(--steel-ink);border-color:var(--steel);font-family:var(--f-display);font-size:19px;white-space:nowrap;padding:0 2px;letter-spacing:.4px}
+.keys .op{font-size:22px}
+.keys .eq{background:var(--tape);color:var(--tape-ink);border-color:var(--tape);font-size:24px}
+.keys .fn{font-size:14px;color:var(--muted)}
+.hint{color:var(--muted);font-size:13px}
+h2{font-family:var(--f-display);font-size:20px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin:0 0 8px}
+.tape{list-style:none;margin:0;padding:0;display:grid;gap:4px;max-height:420px;overflow:auto}
+.tape li{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:5px 2px;cursor:pointer;font-family:var(--f-num);font-size:13.5px}
+.tape li span:first-child{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tape li span:last-child{font-weight:600;white-space:nowrap}
+/* forms */
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+label.f{display:grid;gap:3px;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+label.f input,label.f select{font:500 16px var(--f-num);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px 9px;width:100%;min-width:0;text-transform:none;letter-spacing:0}
+.out{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:12px}
+.out div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.out b{display:block;font:600 19px var(--f-num);font-variant-numeric:tabular-nums}
+.out span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.checks{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.pill{font-size:12.5px;border-radius:999px;padding:3px 10px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)} .pill.bad{color:var(--bad)} .pill.warn{color:var(--warn)}
+.tbl{overflow-x:auto;margin-top:10px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);text-align:right;padding:5px 8px;border-bottom:2px solid var(--line);font-weight:600}
+td{font-family:var(--f-num);text-align:right;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap;font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+svg.draw{width:100%;height:auto;max-width:100%;display:block;margin-top:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-bottom:10px}
+.seg button{border:0;background:var(--panel);color:var(--muted);padding:7px 12px;font:600 13px var(--f-body);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--steel);color:var(--steel-ink)}
+.btn{font:600 14px var(--f-body);background:var(--tape);color:var(--tape-ink);border:0;border-radius:7px;padding:9px 14px;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+
+.details{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px}
+.details figure{margin:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}
+.details figcaption{font-family:var(--f-display);font-weight:600;font-size:16px;text-transform:uppercase;letter-spacing:.5px}
+small.code{font-size:12px;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand"><h1>Shop Calc</h1><span class="tag">GMC</span></div>
+    <div class="lang" role="group" aria-label="Language">
+      <button id="lang-es" aria-pressed="true">ES</button><button id="lang-en" aria-pressed="false">EN</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="calc" aria-selected="true" data-i="tCalc">Calculadora</button>
+    <button role="tab" data-tab="stairs" aria-selected="false" data-i="tStairs">Escalera</button>
+    <button role="tab" data-tab="space" aria-selected="false" data-i="tSpace">Espaciar</button>
+    <button role="tab" data-tab="angle" aria-selected="false" data-i="tAngle">Ángulos</button>
+    <button role="tab" data-tab="prefs" aria-selected="false" data-i="tPrefs">Ajustes</button>
+  </nav>
+
+  <!-- CALCULATOR -->
+  <section id="calc" class="grid2">
+    <div class="panel" style="display:grid;gap:10px">
+      <div class="lcd">
+        <input id="expr" inputmode="none" autocomplete="off" spellcheck="false" aria-label="Expression" value="12' 6 1/2&quot; + 3' 4 3/8&quot; + 150mm">
+        <div class="res" id="res">—</div>
+        <div class="err" id="err"></div>
+        <div class="conv" id="conv"></div>
+      </div>
+      <div class="keys" id="keys"></div>
+      <p class="hint" data-i="calcHint">Ejemplos: 12' 6 1/2"  ·  12'-6-1/2"  ·  150mm  ·  2.4m  ·  10' × 12' (área)  ·  ( 8' + 6" ) ÷ 4. Con teclado de computadora: / dentro de un número es fracción; para dividir usa ÷ o " / " con espacios.</p>
+    </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2 data-i="tape">Cinta</h2><button class="btn ghost" id="clearTape" data-i="clear">Borrar</button></div>
+      <ul class="tape" id="tapeList"></ul>
+      <p class="hint" data-i="tapeHint">Toca un renglón para usar ese resultado.</p>
+    </div>
+  </section>
+
+  <!-- STAIRS -->
+  <section id="stairs" class="grid2" hidden>
+    <div class="panel">
+      <h2 data-i="tStairs">Escalera</h2>
+      <div class="fields">
+        <label class="f"><span data-i="sRise">Altura total (piso a piso)</span><input id="sRise" value="10' 8&quot;"></label>
+        <label class="f"><span data-i="sMaxR">Peralte máximo</span><input id="sMaxR" value="7&quot;"></label>
+        <label class="f"><span data-i="sTread">Huella (corrida por escalón)</span><input id="sTread" value="11&quot;"></label>
+        <label class="f"><span data-i="sRun">Corrida total disponible (opcional)</span><input id="sRun" value="" placeholder="—"></label>
+        <label class="f"><span data-i="sNose">Nariz / nosing</span><input id="sNose" value="0"></label>
+        <label class="f"><span data-i="sCode">Código</span><select id="sCode">
+          <option value="IBC">IBC – comercial</option><option value="IRC">IRC – residencial</option><option value="OSHA">OSHA 1910.25 – industrial</option></select></label>
+      </div>
+      <div class="row"><label class="f" style="flex:1"><span data-i="sTop">Arriba</span><select id="sTop">
+        <option value="floor" data-i="sTopFloor">El piso de arriba es el último escalón (huellas = peraltes − 1)</option>
+        <option value="tread" data-i="sTopTread">Huella extra arriba (huellas = peraltes)</option></select></label></div>
+      <div class="out" id="sOut"></div>
+      <div class="checks" id="sChecks"></div>
+      <svg class="draw" id="sSvg" viewBox="0 0 600 300" role="img" aria-label="Stair layout"></svg>
+    </div>
+    <div class="panel">
+      <h2 data-i="chTitle">Larguero de canal – corte</h2>
+      <p class="hint" data-i="chHint">Escalones por dentro del canal. La línea de narices va paralela al borde de arriba del canal.</p>
+      <div class="fields">
+        <label class="f"><span data-i="chSize">Canal</span><input id="chSize" value="C12x10.4"></label>
+        <label class="f"><span data-i="chD">Peralte del canal</span><input id="chD" value="12&quot;"></label>
+        <label class="f"><span data-i="chA">Nariz abajo del borde</span><input id="chA" value="2&quot;"></label>
+        <label class="f"><span data-i="chTd">Fondo del escalón</span><input id="chTd" value="11 1/4&quot;"></label>
+        <label class="f"><span data-i="chThk">Grueso del escalón</span><input id="chThk" value="1 1/2&quot;"></label>
+      </div>
+      <div class="out" id="chOut"></div>
+      <div class="checks" id="chChecks"></div>
+      <svg class="draw" id="chSvg" viewBox="0 0 900 500" role="img" aria-label="Stringer overview"></svg>
+      <div class="details"><figure><figcaption data-i="detBot">Corte de abajo</figcaption><svg class="draw" id="chBot" role="img" aria-label="Bottom cut detail"></svg></figure>
+      <figure><figcaption data-i="detTop">Corte de arriba</figcaption><svg class="draw" id="chTop" role="img" aria-label="Top cut detail"></svg></figure></div>
+      <h2 data-i="sLayout" style="margin-top:14px">Trazo del larguero</h2>
+      <p class="hint" data-i="sLayoutHint">Marca cada nariz midiendo sobre el borde de arriba del canal desde la punta de abajo, y baja a escuadra la medida "Nariz abajo del borde".</p>
+      <div class="tbl"><table><thead><tr><th>#</th><th data-i="sH">Altura</th><th data-i="sEdge">Sobre el borde</th><th data-i="sFrom1">Desde 1ª nariz</th></tr></thead><tbody id="sTable"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- SPACING -->
+  <section id="space" class="grid2" hidden>
+    <div class="panel">
+      <h2 data-i="tSpace">Espaciar</h2>
+      <div class="seg" role="group"><button id="mBal" aria-pressed="true" data-i="mBal">Barrotes / barandal</button><button id="mEq" aria-pressed="false" data-i="mEq">Partes iguales</button></div>
+      <div class="fields" id="balFields">
+        <label class="f"><span data-i="pLen">Claro entre postes</span><input id="pLen" value="8' 3 1/2&quot;"></label>
+        <label class="f"><span data-i="pW">Ancho del barrote</span><input id="pW" value="3/4&quot;"></label>
+        <label class="f"><span data-i="pGap">Espacio libre máximo</span><input id="pGap" value="3 7/8&quot;"></label>
+      </div>
+      <div class="fields" id="eqFields" hidden>
+        <label class="f"><span data-i="eLen">Distancia total</span><input id="eLen" value="20' 0&quot;"></label>
+        <label class="f"><span data-i="eN">Número de espacios</span><input id="eN" value="6" inputmode="numeric"></label>
+        <label class="f"><span data-i="eW">Ancho de cada pieza (opcional)</span><input id="eW" value="0"></label>
+      </div>
+      <div class="out" id="pOut"></div>
+      <div class="checks" id="pChecks"></div>
+      <svg class="draw" id="pSvg" viewBox="0 0 600 120" role="img" aria-label="Spacing layout"></svg>
+    </div>
+    <div class="panel">
+      <h2 data-i="pMarks">Marcas</h2>
+      <p class="hint" id="pMarksHint"></p>
+      <div class="tbl"><table><thead><tr><th>#</th><th data-i="pEdge">Orilla izquierda</th><th data-i="pCenter">Centro</th></tr></thead><tbody id="pTable"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- ANGLES -->
+  <section id="angle" class="grid2" hidden>
+    <div class="panel">
+      <h2 data-i="tAngle">Ángulos</h2>
+      <p class="hint" data-i="aHint">Llena dos datos cualquiera y calcula los demás. Los últimos dos que escribiste son los que se usan.</p>
+      <div class="fields">
+        <label class="f"><span data-i="aRise">Altura (rise)</span><input id="aRise" value="3'"></label>
+        <label class="f"><span data-i="aRun">Corrida (run)</span><input id="aRun" value="4'"></label>
+        <label class="f"><span data-i="aDiag">Diagonal</span><input id="aDiag" value=""></label>
+        <label class="f"><span data-i="aDeg">Ángulo (grados)</span><input id="aDeg" value=""></label>
+        <label class="f"><span data-i="aPitch">Pendiente (pulg. por 12")</span><input id="aPitch" value=""></label>
+        <label class="f"><span data-i="aPct">Pendiente %</span><input id="aPct" value=""></label>
+      </div>
+      <div class="row"><button class="btn" id="aGo" data-i="calcBtn">Calcular</button><button class="btn ghost" id="aClear" data-i="clear">Borrar</button></div>
+      <div class="out" id="aOut"></div>
+    </div>
+    <div class="panel">
+      <svg class="draw" id="aSvg" viewBox="0 0 600 340" role="img" aria-label="Right triangle"></svg>
+      <p class="hint" data-i="aCut">Corte a escuadra: el ángulo complementario es 90° − ángulo. Para cortar a inglete dos piezas que se juntan, corta cada una a la mitad del ángulo de la esquina.</p>
+    </div>
+  </section>
+
+  <!-- PREFERENCES -->
+  <section id="prefs" hidden>
+    <div class="panel">
+      <h2 data-i="tPrefs">Ajustes</h2>
+      <div class="fields">
+        <label class="f"><span data-i="prFmt">Mostrar resultado en</span><select id="prFmt"></select></label>
+        <label class="f"><span data-i="prDen">Precisión de fracción</span><select id="prDen">
+          <option value="2">1/2"</option><option value="4">1/4"</option><option value="8">1/8"</option><option value="16" selected>1/16"</option><option value="32">1/32"</option><option value="64">1/64"</option></select></label>
+        <label class="f"><span data-i="prBare">Número sin unidad al sumar</span><select id="prBare">
+          <option value="in" data-i="uIn">pulgadas</option><option value="ft" data-i="uFt">pies</option><option value="mm">mm</option><option value="cm">cm</option></select></label>
+        <label class="f"><span data-i="prMet">Decimales métricos</span><select id="prMet"><option value="0">0</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option></select></label>
+        <label class="f"><span data-i="prCode">Código de escalera por defecto</span><select id="prCode"><option value="IBC">IBC</option><option value="IRC">IRC</option><option value="OSHA">OSHA</option></select></label>
+        <label class="f"><span data-i="prDash">Formato pies-pulgadas</span><select id="prDash"><option value="space">12' 6-1/2"</option><option value="dash">12'-6 1/2"</option></select></label>
+      </div>
+      <div class="row"><button class="btn ghost" id="prReset" data-i="reset">Volver a los valores de fábrica</button><span class="hint" id="prSaved"></span></div>
+      <p class="hint" data-i="prNote">Los ajustes se guardan en este navegador. Límites de escalera: IBC 1011.5 (peralte 4"–7", huella mín. 11"), IRC R311.7.5 (peralte máx. 7-3/4", huella mín. 10"), OSHA 1910.25(c) (peralte 6-1/2"–9-1/2", huella mín. 9-1/2", 30°–50°).</p>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const store = { get(k, d){ try{ const v = localStorage.getItem('gmccalc_' + k); return v == null ? d : JSON.parse(v); }catch(e){ return d; } },
+                set(k, v){ try{ localStorage.setItem('gmccalc_' + k, JSON.stringify(v)); }catch(e){} } };
+
+/* ---------- language ---------- */
+const T = {
+ es:{tCalc:'Calculadora',tStairs:'Escalera',tSpace:'Espaciar',tAngle:'Ángulos',tPrefs:'Ajustes',tape:'Cinta',clear:'Borrar',reset:'Volver a los valores de fábrica',
+  calcHint:'Ejemplos: 12\' 6 1/2"  ·  12\'-6-1/2"  ·  150mm  ·  2.4m  ·  10\' × 12\' (área)  ·  ( 8\' + 6" ) ÷ 4. Con teclado de computadora: / dentro de un número es fracción; para dividir usa ÷ o " / " con espacios.',
+  tapeHint:'Toca un renglón para usar ese resultado.',sRise:'Altura total (piso a piso)',sMaxR:'Peralte máximo',sTread:'Huella (corrida por escalón)',sRun:'Corrida total disponible (opcional)',sNose:'Nariz / nosing',sCode:'Código',sTop:'Arriba',
+  sTopFloor:'El piso de arriba es el último escalón (huellas = peraltes − 1)',sTopTread:'Huella extra arriba (huellas = peraltes)',sLayout:'Trazo del larguero',
+  sLayoutHint:'Marca cada nariz midiendo sobre el borde de arriba del canal desde la punta de abajo, y baja a escuadra la medida "Nariz abajo del borde".',sEdge:'Sobre el borde',sFrom1:'Desde 1ª nariz',chTitle:'Larguero de canal – corte',chHint:'Escalones por dentro del canal. La línea de narices va paralela al borde de arriba del canal.',chSize:'Canal',chD:'Peralte del canal',chA:'Nariz abajo del borde',chTd:'Fondo del escalón',chThk:'Grueso del escalón',n2n:'Nariz 1er escalón → nariz último escalón',n2top:'Nariz 1er escalón → orilla piso de arriba',chLen:'Largo del canal (corte)',chOrder:'Pedir canal de',botLevel:'Abajo: corte a nivel (piso)',botPlumb:'Abajo: corte a plomo (punta)',topLevel:'Arriba: corte a nivel',topPlumb:'Arriba: corte a plomo',cutAng:'Ángulo de corte',fitOk:'El escalón cabe dentro del canal',fitBad:'El escalón se sale del canal – baja la nariz o usa canal más peraltado',noseLine:'línea de narices',floorLo:'piso',floorHi:'piso arriba',detBot:'Corte de abajo',detTop:'Corte de arriba',nose1:'1ª nariz',sH:'Altura',sX:'Horizontal',sAlong:'Sobre larguero',
+  mBal:'Barrotes / barandal',mEq:'Partes iguales',pLen:'Claro entre postes',pW:'Ancho del barrote',pGap:'Espacio libre máximo',eLen:'Distancia total',eN:'Número de espacios',eW:'Ancho de cada pieza (opcional)',pMarks:'Marcas',pEdge:'Orilla izquierda',pCenter:'Centro',
+  aHint:'Llena dos datos cualquiera y calcula los demás. Los últimos dos que escribiste son los que se usan.',aRise:'Altura (rise)',aRun:'Corrida (run)',aDiag:'Diagonal',aDeg:'Ángulo (grados)',aPitch:'Pendiente (pulg. por 12")',aPct:'Pendiente %',calcBtn:'Calcular',
+  aCut:'Corte a escuadra: el ángulo complementario es 90° − ángulo. Para cortar a inglete dos piezas que se juntan, corta cada una a la mitad del ángulo de la esquina.',
+  prFmt:'Mostrar resultado en',prDen:'Precisión de fracción',prBare:'Número sin unidad al sumar',prMet:'Decimales métricos',prCode:'Código de escalera por defecto',prDash:'Formato pies-pulgadas',uIn:'pulgadas',uFt:'pies',
+  prNote:'Los ajustes se guardan en este navegador. Límites de escalera: IBC 1011.5 (peralte 4"–7", huella mín. 11"), IRC R311.7.5 (peralte máx. 7-3/4", huella mín. 10"), OSHA 1910.25(c) (peralte 6-1/2"–9-1/2", huella mín. 9-1/2", 30°–50°).',
+  saved:'Guardado',risers:'Peraltes',riser:'Peralte',treads:'Huellas',tread:'Huella',totalRun:'Corrida total',stringer:'Largo del larguero',angle:'Ángulo',rule:'2 peraltes + huella',
+  okR:'Peralte dentro del código',badR:'Peralte fuera del código',okT:'Huella dentro del código',badT:'Huella menor al mínimo',okA:'Ángulo OK',badA:'Ángulo fuera de 30°–50°',ruleOk:'Cómoda (24"–25")',ruleBad:'Fuera de 24"–25"',runOver:'No cabe en la corrida disponible',runFit:'Cabe en la corrida disponible',
+  pieces:'Barrotes',gap:'Espacio libre',cc:'Centro a centro',spaces:'Espacios',each:'Cada espacio',gapOk:'Espacio ≤ máximo',sphere:'Regla de la esfera de 4"',
+  marksBal:'Marca la orilla izquierda de cada barrote, midiendo desde la cara del poste izquierdo.',marksEq:'Marcas medidas desde el inicio. Con ancho de pieza, la orilla es la marca y el centro está a la mitad.',
+  diag:'Diagonal',deg:'Ángulo',comp:'Complemento',pitch:'Pendiente',pct:'Pendiente %',need2:'Escribe al menos dos datos.',
+  errNum:'No entiendo esta expresión. Revisa los números y las unidades.',errDim:'No se puede sumar una medida con un área.',errDiv:'División entre cero.',
+  fmtFt:'Pies-pulg-fracción',fmtIn:'Pulgadas-fracción',fmtDf:'Pies decimales',fmtMm:'Milímetros',fmtCm:'Centímetros',fmtM:'Metros',area:'Área',vol:'Volumen',num:'Número'},
+ en:{tCalc:'Calculator',tStairs:'Stairs',tSpace:'Spacing',tAngle:'Angles',tPrefs:'Settings',tape:'Tape',clear:'Clear',reset:'Reset to defaults',
+  calcHint:'Examples: 12\' 6 1/2"  ·  12\'-6-1/2"  ·  150mm  ·  2.4m  ·  10\' × 12\' (area)  ·  ( 8\' + 6" ) ÷ 4. On a computer keyboard, / inside a number is a fraction; to divide use ÷ or " / " with spaces.',
+  tapeHint:'Tap a line to reuse that result.',sRise:'Total rise (floor to floor)',sMaxR:'Max riser',sTread:'Tread (run per step)',sRun:'Total run available (optional)',sNose:'Nosing',sCode:'Code',sTop:'Top',
+  sTopFloor:'Upper floor is the last step (treads = risers − 1)',sTopTread:'Extra tread at top (treads = risers)',sLayout:'Stringer layout',
+  sLayoutHint:'Mark each nose measuring along the top edge of the channel from the bottom tip, then square down the "Nose below edge" distance.',sEdge:'Along top edge',sFrom1:'From 1st nose',chTitle:'Channel stringer – cuts',chHint:'Treads inside the channel. The nosing line runs parallel to the top edge of the channel.',chSize:'Channel',chD:'Channel depth',chA:'Nose below top edge',chTd:'Tread depth',chThk:'Tread thickness',n2n:'1st nose → last tread nose',n2top:'1st nose → upper floor edge',chLen:'Channel length (cut)',chOrder:'Order channel',botLevel:'Bottom: level cut (floor)',botPlumb:'Bottom: plumb cut (toe)',topLevel:'Top: level cut',topPlumb:'Top: plumb cut',cutAng:'Cut angle',fitOk:'Tread fits inside the channel',fitBad:'Tread sticks out of the channel – lower the nose or use a deeper channel',noseLine:'nosing line',floorLo:'floor',floorHi:'upper floor',detBot:'Bottom cut',detTop:'Top cut',nose1:'1st nose',sH:'Height',sX:'Horizontal',sAlong:'Along stringer',
+  mBal:'Pickets / railing',mEq:'Equal parts',pLen:'Clear between posts',pW:'Picket width',pGap:'Max clear gap',eLen:'Total distance',eN:'Number of spaces',eW:'Piece width (optional)',pMarks:'Marks',pEdge:'Left edge',pCenter:'Center',
+  aHint:'Fill in any two and get the rest. The last two you typed are used.',aRise:'Rise',aRun:'Run',aDiag:'Diagonal',aDeg:'Angle (degrees)',aPitch:'Pitch (in. per 12")',aPct:'Slope %',calcBtn:'Calculate',
+  aCut:'Square cut: the complement is 90° − angle. To miter two pieces that meet, cut each at half the corner angle.',
+  prFmt:'Show result as',prDen:'Fraction precision',prBare:'Unitless number when adding',prMet:'Metric decimals',prCode:'Default stair code',prDash:'Feet-inch format',uIn:'inches',uFt:'feet',
+  prNote:'Settings are saved in this browser. Stair limits: IBC 1011.5 (riser 4"–7", tread min 11"), IRC R311.7.5 (riser max 7-3/4", tread min 10"), OSHA 1910.25(c) (riser 6-1/2"–9-1/2", tread min 9-1/2", 30°–50°).',
+  saved:'Saved',risers:'Risers',riser:'Riser',treads:'Treads',tread:'Tread',totalRun:'Total run',stringer:'Stringer length',angle:'Angle',rule:'2 risers + tread',
+  okR:'Riser within code',badR:'Riser outside code',okT:'Tread within code',badT:'Tread below minimum',okA:'Angle OK',badA:'Angle outside 30°–50°',ruleOk:'Comfortable (24"–25")',ruleBad:'Outside 24"–25"',runOver:'Does not fit the available run',runFit:'Fits the available run',
+  pieces:'Pickets',gap:'Clear gap',cc:'Center to center',spaces:'Spaces',each:'Each space',gapOk:'Gap ≤ max',sphere:'4" sphere rule',
+  marksBal:'Mark the left edge of each picket, measured from the face of the left post.',marksEq:'Marks measured from the start. With a piece width, the mark is the edge and the center is half a width further.',
+  diag:'Diagonal',deg:'Angle',comp:'Complement',pitch:'Pitch',pct:'Slope %',need2:'Enter at least two values.',
+  errNum:'I can\'t read this expression. Check the numbers and units.',errDim:'You can\'t add a length to an area.',errDiv:'Division by zero.',
+  fmtFt:'Feet-inch-fraction',fmtIn:'Inch-fraction',fmtDf:'Decimal feet',fmtMm:'Millimeters',fmtCm:'Centimeters',fmtM:'Meters',area:'Area',vol:'Volume',num:'Number'}
+};
+const DEF = {lang:'es', fmt:'ft', den:16, bare:'in', met:1, code:'IBC', dash:'space'};
+let P = Object.assign({}, DEF, store.get('prefs', {}));
+const t = k => (T[P.lang] && T[P.lang][k]) || T.es[k] || k;
+
+/* ---------- length math (internal unit: inch) ---------- */
+const U = {"'":12, ft:12, '"':1, in:1, mm:1/25.4, cm:1/2.54, m:1/0.0254, yd:36};
+function gcd(a,b){ return b ? gcd(b, a % b) : a; }
+function frac(x){ // x >= 0 inches -> [whole, num, den]
+  const d = P.den, n = Math.round(x * d), w = Math.floor(n / d); let f = n - w * d, dd = d;
+  if (f){ const g = gcd(f, dd); f /= g; dd /= g; }
+  return [w, f, dd];
+}
+function fIn(x){ const s = x < 0 ? '-' : ''; const [w, f, d] = frac(Math.abs(x)); return s + (w || !f ? w : '') + (f ? (w ? '-' : '') + f + '/' + d : '') + '"'; }
+function fFt(x){
+  const s = x < 0 ? '-' : ''; let [w, f, d] = frac(Math.abs(x));
+  const ft = Math.floor(w / 12), inch = w % 12;
+  const ins = (inch || !f ? inch : '') + (f ? (inch ? (P.dash === 'dash' ? ' ' : '-') : '') + f + '/' + d : '') + '"';
+  if (!ft) return s + ins;
+  return s + ft + "'" + (P.dash === 'dash' ? '-' : ' ') + ins;
+}
+const nf = (v, dp) => v.toLocaleString(P.lang === 'es' ? 'es-MX' : 'en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
+const FMT = {
+  ft:{lab:'fmtFt', f:fFt}, in:{lab:'fmtIn', f:fIn},
+  df:{lab:'fmtDf', f:x => nf(x / 12, 3) + ' ft'},
+  mm:{lab:'fmtMm', f:x => nf(x * 25.4, P.met) + ' mm'},
+  cm:{lab:'fmtCm', f:x => nf(x * 2.54, Math.max(P.met, 1)) + ' cm'},
+  m:{lab:'fmtM', f:x => nf(x * 0.0254, 3) + ' m'}
+};
+const L = (x, k) => (FMT[k || P.fmt] || FMT.ft).f(x);
+
+/* ---------- expression parser ---------- */
+function prep(s){
+  return s.replace(/×|\*/g, ' * ').replace(/(\d|['"]|mm|cm|ft|in|m)\s*[xX]\s*(?=[\d(.])/g, '$1 * ')
+    .replace(/÷/g, ' ÷ ').replace(/\s\/\s/g, ' ÷ ').replace(/−/g, '-')
+    .replace(/[”″“]/g, '"').replace(/[’′‘]/g, "'").replace(/''/g, '"')   // phone keyboards: two apostrophes = inches
+    .replace(/'-(?=\d)/g, "' ")                // 12'-6"  -> 12' 6"   (with spaces around - it stays a minus)
+    .replace(/(\d)-(\d+\/\d+)/g, '$1 $2')      // 6-1/2   -> 6 1/2
+    .replace(/(\d)\s*(?=(mm|cm|m|ft|in|yd)\b)/g, '$1 ');
+}
+function tokenize(s){
+  const out = []; let i = 0;
+  while (i < s.length){
+    const c = s[i];
+    if (/\s/.test(c)){ i++; continue; }
+    let m = s.slice(i).match(/^(\d+(?:\.\d+)?|\.\d+)(?:\/(\d+))?/);
+    if (m){
+      let v = m[2] ? parseFloat(m[1]) / parseFloat(m[2]) : parseFloat(m[1]); i += m[0].length;
+      if (!m[2] && !m[1].includes('.')){ const r = s.slice(i).match(/^\s+(\d+)\/(\d+)/); if (r){ v += parseFloat(r[1]) / parseFloat(r[2]); i += r[0].length; } }
+      out.push({t:'n', v}); continue;
+    }
+    m = s.slice(i).match(/^(mm|cm|ft|in|yd|m)\b/) || s.slice(i).match(/^['"]/);
+    if (m){ out.push({t:'u', v:m[0]}); i += m[0].length; continue; }
+    if ('+-*÷()'.includes(c)){ out.push({t:'o', v:c}); i++; continue; }
+    throw new Error('errNum');
+  }
+  return out;
+}
+function parse(s){
+  const tk = tokenize(prep(s)); let p = 0;
+  const peek = () => tk[p], eat = () => tk[p++];
+  const bare = v => ({v:v * U[P.bare], d:1});
+  function add(a, b, sgn){
+    if (a.d === 0 && b.d === 1) a = bare(a.v); if (b.d === 0 && a.d === 1) b = bare(b.v);
+    if (a.d !== b.d) throw new Error('errDim'); return {v:a.v + sgn * b.v, d:a.d};
+  }
+  function expr(){ let a = term(); while (peek() && peek().t === 'o' && '+-'.includes(peek().v)){ const o = eat().v; a = add(a, term(), o === '+' ? 1 : -1); } return a; }
+  function term(){ let a = unary(); while (peek() && peek().t === 'o' && '*÷'.includes(peek().v)){ const o = eat().v; const b = unary();
+      if (o === '*') a = {v:a.v * b.v, d:a.d + b.d}; else { if (!b.v) throw new Error('errDiv'); a = {v:a.v / b.v, d:a.d - b.d}; } } return a; }
+  function unary(){ if (peek() && peek().t === 'o' && peek().v === '-'){ eat(); const a = unary(); return {v:-a.v, d:a.d}; } if (peek() && peek().t === 'o' && peek().v === '+'){ eat(); } return prim(); }
+  function prim(){
+    const k = peek(); if (!k) throw new Error('errNum');
+    if (k.t === 'o' && k.v === '('){ eat(); const a = expr(); if (!peek() || peek().v !== ')') throw new Error('errNum'); eat(); return a; }
+    if (k.t !== 'n') throw new Error('errNum');
+    eat(); let u = peek();
+    if (!u || u.t !== 'u') return {v:k.v, d:0};
+    eat(); let tot = k.v * U[u.v], lastU = u.v;
+    while (peek() && peek().t === 'n'){
+      const n = peek(), nx = tk[p + 1];
+      if (nx && nx.t === 'u' && U[nx.v] < U[lastU]){ p += 2; tot += n.v * U[nx.v]; lastU = nx.v; continue; }
+      if ((lastU === "'" || lastU === 'ft') && !(nx && nx.t === 'u')){ p += 1; tot += n.v; lastU = '"'; continue; }
+      // 16" 12  -> read as 16' 12" (first mark typed as inches by mistake, a plain number follows)
+      if (lastU === '"' && tot === k.v && !(nx && nx.t === 'u')){ p += 1; tot = k.v * 12 + n.v; lastU = '"'; continue; }
+      break;
+    }
+    return {v:tot, d:1};
+  }
+  const r = expr(); if (p < tk.length) throw new Error('errNum'); return r;
+}
+function show(r){ // -> {main, conv:[[key,text]]}
+  if (r.d === 1) return {main:L(r.v), conv:Object.keys(FMT).map(k => [k, L(r.v, k)])};
+  if (r.d === 0) return {main:r.v.toLocaleString(P.lang === 'es' ? 'es-MX' : 'en-US', {maximumFractionDigits:6}), conv:[]};
+  if (r.d === 2) return {main:nf(r.v / 144, 2) + ' ft²', conv:[['', nf(r.v, 1) + ' in²'], ['', nf(r.v * 0.00064516, 3) + ' m²']]};
+  if (r.d === 3) return {main:nf(r.v / 1728, 2) + ' ft³', conv:[['', nf(r.v / 46656, 3) + ' yd³'], ['', nf(r.v * 1.6387e-5, 3) + ' m³']]};
+  return {main:'—', conv:[]};
+}
+
+/* ---------- calculator UI ---------- */
+const expr = $('expr'); let tapeData = store.get('tape', []), last = null, convSel = null;
+const KEYS = [['C','fn','clr'],['(','op'],[')','op'],['⌫','fn','bk'],['÷','op'],
+  ['7'],['8'],['9'],["Pie '",'u',"' "],['×','op',' × '],
+  ['4'],['5'],['6'],['Pulg"','u','" '],['−','op',' - '],
+  ['1'],['2'],['3'],['/','u','/'],['+','op',' + '],
+  ['0'],['.'],['esp','fn',' '],['mm','u','mm '],['=','eq','eq'],
+  ['cm','u','cm '],['m','u','m '],['ft²→','fn','area'],['Ans','fn','ans'],['%','fn','pct']];
+function renderKeys(){
+  $('keys').innerHTML = KEYS.map(([l, c, v]) => `<button type="button" class="${c || ''}" data-v="${(v ?? l).replace(/"/g,'&quot;')}">${P.lang === 'en' ? l.replace('Pie','Ft').replace('Pulg','In').replace('esp','spc') : l}</button>`).join('');
+}
+function insert(s){ const a = expr.selectionStart ?? expr.value.length, b = expr.selectionEnd ?? a; expr.value = expr.value.slice(0, a) + s + expr.value.slice(b); const c = a + s.length; expr.setSelectionRange(c, c); live(); }
+function live(){
+  const s = expr.value.trim(); $('err').textContent = '';
+  if (!s){ $('res').textContent = '—'; $('conv').innerHTML = ''; return null; }
+  try { const r = parse(s.replace(/\bans\b/gi, last ? `(${last.v}${last.d === 1 ? '"' : ''})` : '0')); const o = show(r);
+    $('res').textContent = convSel && r.d === 1 ? L(r.v, convSel) : o.main;
+    $('conv').innerHTML = o.conv.map(([k, x]) => `<button type="button" data-k="${k}" aria-pressed="${k && (convSel || P.fmt) === k}">${x}</button>`).join('');
+    return r;
+  } catch(e){ $('res').textContent = '…'; $('err').textContent = t(e.message) || t('errNum'); $('conv').innerHTML = ''; return null; }
+}
+function equals(){
+  const r = live(); if (!r) return;
+  last = r; tapeData.unshift({e:expr.value.trim(), v:r.v, d:r.d}); tapeData = tapeData.slice(0, 60); store.set('tape', tapeData); renderTape();
+}
+function renderTape(){
+  $('tapeList').innerHTML = tapeData.map((x, i) => `<li data-i="${i}" tabindex="0"><span>${x.e.replace(/</g,'&lt;')}</span><span>${show(x).main}</span></li>`).join('') || `<li style="cursor:default"><span>—</span><span></span></li>`;
+}
+$('keys').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return; const v = b.dataset.v;
+  if (v === 'clr'){ expr.value = ''; convSel = null; live(); }
+  else if (v === 'bk'){ const a = expr.selectionStart ?? expr.value.length; if (a > 0){ expr.value = expr.value.slice(0, a - 1) + expr.value.slice(a); expr.setSelectionRange(a - 1, a - 1); live(); } }
+  else if (v === 'eq') equals();
+  else if (v === 'ans') insert('ans ');
+  else if (v === 'area'){ const r = live(); if (r && r.d === 1){ /* square the length */ expr.value = `(${expr.value}) × (${expr.value})`; live(); } }
+  else if (v === 'pct') insert(' × 0.01');
+  else insert(v);
+  expr.focus({preventScroll:true});
+});
+expr.addEventListener('input', live);
+expr.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); equals(); } });
+$('conv').addEventListener('click', e => { const b = e.target.closest('button'); if (!b || !b.dataset.k) return; convSel = b.dataset.k === convSel ? null : b.dataset.k; live(); });
+$('tapeList').addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (!li) return; const x = tapeData[+li.dataset.i]; if (x.d !== 1) return; insert(fIn(x.v).replace(/-(\d+\/)/, ' $1') + ' '); });
+$('clearTape').addEventListener('click', () => { tapeData = []; store.set('tape', tapeData); renderTape(); });
+
+/* ---------- shared input reader ---------- */
+function len(id, fallbackUnit){ const s = $(id).value.trim(); if (!s) return null; try { const r = parse(s); return r.d === 1 ? r.v : r.d === 0 ? r.v * U[fallbackUnit || P.bare] : null; } catch(e){ return null; } }
+function bad(id, on){ $(id).style.borderColor = on ? 'var(--bad)' : ''; }
+
+/* ---------- stairs ---------- */
+const CODE = {IBC:{rMin:4, rMax:7, tMin:11, aMin:0, aMax:90}, IRC:{rMin:0, rMax:7.75, tMin:10, aMin:0, aMax:90}, OSHA:{rMin:6.5, rMax:9.5, tMin:9.5, aMin:30, aMax:50}};
+function stairs(){
+  const rise = len('sRise'), maxR = len('sMaxR'), tread0 = len('sTread'), runAv = len('sRun'), nose = len('sNose') || 0;
+  ['sRise','sMaxR','sTread'].forEach(id => bad(id, len(id) == null)); if (rise == null || maxR == null || tread0 == null || !maxR) return;
+  const code = CODE[$('sCode').value];
+  const n = Math.max(1, Math.ceil(rise / maxR - 1e-9)), r = rise / n, nt = $('sTop').value === 'floor' ? n - 1 : n;
+  const tread = runAv && nt ? runAv / nt : tread0, run = tread * nt, ang = Math.atan2(r, tread) * 180 / Math.PI, step = Math.hypot(r, tread), str = Math.hypot(rise, run);
+  const box = (k, v) => `<div><span>${t(k)}</span><b>${v}</b></div>`;
+  $('sOut').innerHTML = box('risers', n) + box('riser', L(r)) + box('treads', nt) + box('tread', L(tread)) + box('totalRun', L(run)) + box('stringer', L(str)) + box('angle', nf(ang, 1) + '°') + box('rule', fIn(2 * r + tread));
+  const pill = (ok, a, b, warn) => `<span class="pill ${ok ? 'ok' : warn ? 'warn' : 'bad'}">${ok ? '✓ ' + t(a) : '✕ ' + t(b)}</span>`;
+  let ch = pill(r <= code.rMax + 1e-6 && r >= code.rMin - 1e-6, 'okR', 'badR') + pill(tread >= code.tMin - 1e-6, 'okT', 'badT');
+  if ($('sCode').value === 'OSHA') ch += pill(ang >= 30 && ang <= 50, 'okA', 'badA');
+  const rule = 2 * r + tread; ch += pill(rule >= 24 && rule <= 25.0001, 'ruleOk', 'ruleBad', true);
+  if (runAv) ch += pill(run <= runAv + 1e-6, 'runFit', 'runOver');
+  ch += `<span class="pill ok" style="color:var(--muted)">${$('sCode').value} · ${t('riser')} ${code.rMin ? fIn(code.rMin) + '–' : '≤ '}${fIn(code.rMax)} · ${t('tread')} ≥ ${fIn(code.tMin)}</span>`;
+  $('sChecks').innerHTML = ch;
+  let rows = '';
+  const chA0 = len('chA') || 0, tanT = r / tread;
+  for (let i = 1; i <= n; i++){ rows += `<tr${i > nt ? ' style="color:var(--muted)"' : ''}><td>${i > nt ? '▲' : i}</td><td>${L(i * r)}</td><td>${L(i * step - chA0 * tanT)}</td><td>${L((i - 1) * step)}</td></tr>`; }
+  $('sTable').innerHTML = rows;
+  channel(n, nt, r, tread, rise);
+  // drawing to scale
+  const W = 600, H = 300, pad = 30, sc = Math.min((W - 2 * pad) / Math.max(run, 1), (H - 2 * pad) / rise), x0 = pad, y0 = H - pad;
+  let d = `M${x0},${y0}`; let x = x0, y = y0;
+  for (let i = 0; i < n; i++){ y -= r * sc; d += ` L${x},${y}`; if (i < nt){ x += tread * sc; d += ` L${x},${y}`; } }
+  const css = getComputedStyle(document.documentElement);
+  $('sSvg').innerHTML = `<line x1="${x0 - 10}" y1="${y0}" x2="${W - 10}" y2="${y0}" stroke="${css.getPropertyValue('--line')}" stroke-width="2"/>
+   <path d="${d}" fill="none" stroke="${css.getPropertyValue('--ink')}" stroke-width="2.5" stroke-linejoin="round"/>
+   <line x1="${x0}" y1="${y0}" x2="${x0 + run * sc}" y2="${y0 - rise * sc}" stroke="${css.getPropertyValue('--tape')}" stroke-width="4" opacity=".8"/>
+   <text x="${x0 + run * sc / 2}" y="${y0 + 20}" text-anchor="middle" font-size="20" fill="${css.getPropertyValue('--muted')}" font-family="JetBrains Mono, monospace">${L(run)}</text>
+   <text x="${W - 14}" y="${y0 - rise * sc / 2}" text-anchor="end" font-size="20" fill="${css.getPropertyValue('--muted')}" font-family="JetBrains Mono, monospace">${L(rise)}</text>`;
+}
+function channel(n, nt, r, tr, rise){
+  const D = len('chD'), a = len('chA'), Td = len('chTd'), thk = len('chThk') || 0;
+  ['chD','chA','chTd'].forEach(id => bad(id, len(id) == null)); if (!D || a == null || !Td) return;
+  const th = Math.atan2(r, tr), sn = Math.sin(th), cs = Math.cos(th), tn = r / tr, step = Math.hypot(r, tr);
+  const yTop = x => (x + tr) * tn + a / cs, yBot = x => (x + tr) * tn - (D - a) / cs;
+  const xT = (n - 1) * tr + (nt === n ? tr : 0), xL = (rise - a / cs) / tn - tr, xb = (D - a) / sn - tr;
+  const P = [[-tr, 0], [-tr, a / cs], [xL, rise], [xT, rise], [xT, yBot(xT)], [xb, 0]];
+  const proj = P.map(([x, y]) => x * cs + y * sn), cutLen = Math.max(...proj) - Math.min(...proj);
+  const n2n = Math.max(0, nt - 1) * step, n2t = (n - 1) * step;
+  const stock = [20, 24, 30, 35, 40, 45, 50].find(f => f * 12 >= cutLen + 2) || Math.ceil(cutLen / 12);
+  const box = (k, v, hl) => `<div${hl ? ' style="border-color:var(--tape);border-width:2px"' : ''}><span>${t(k)}</span><b>${v}</b></div>`;
+  $('chOut').innerHTML = box('n2n', L(n2n), 1) + box('n2top', L(n2t)) + box('chLen', L(cutLen)) + box('chOrder', stock + "' " + $('chSize').value)
+    + box('botLevel', L(xb + tr)) + box('botPlumb', L(a / cs)) + box('topLevel', L(xT - xL)) + box('topPlumb', L(rise - yBot(xT))) + box('cutAng', nf(th * 180 / Math.PI, 1) + '° / ' + nf(90 - th * 180 / Math.PI, 1) + '°');
+  // fit: back-bottom corner of each tread must stay inside the channel (0.5" clearance to the bottom flange)
+  const deep = ((Td) * sn + thk * cs) + a;
+  const ok = deep <= D - 0.5 && a >= 0.25;
+  $('chChecks').innerHTML = `<span class="pill ${ok ? 'ok' : 'bad'}">${ok ? '✓ ' + t('fitOk') : '✕ ' + t('fitBad')} (${L(deep)} / ${L(D)})</span>`;
+  // drawing
+  const css = getComputedStyle(document.documentElement), ink = css.getPropertyValue('--ink'), mut = css.getPropertyValue('--muted'), tape = css.getPropertyValue('--tape'), steel = css.getPropertyValue('--steel'), lineC = css.getPropertyValue('--line');
+  const minX = -tr - 24, maxX = xT + 30, minY = -14, maxY = rise + a / cs + 14, W = 900, sc = W / (maxX - minX), H = Math.max(260, (maxY - minY) * sc + 60);
+  $('chSvg').setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const X = x => (x - minX) * sc, Y = y => H - 40 - (y - minY) * sc, fs = 21, mono = 'font-family="JetBrains Mono, monospace"';
+  const txt = (x, y, s, anc = 'middle', col = ink, rot = 0) => `<text x="${x}" y="${y}" text-anchor="${anc}" font-size="${fs}" fill="${col}" ${mono}${rot ? ` transform="rotate(${rot} ${x} ${y})"` : ''}>${s}</text>`;
+  let g = `<line x1="0" y1="${Y(0)}" x2="${X(xb + 30)}" y2="${Y(0)}" stroke="${lineC}" stroke-width="3"/>${txt(10, Y(0) + 24, t('floorLo'), 'start', mut)}`;
+  g += `<line x1="${X(xL - 10)}" y1="${Y(rise)}" x2="${W}" y2="${Y(rise)}" stroke="${lineC}" stroke-width="3"/>${txt(W - 6, Y(rise) - 8, t('floorHi'), 'end', mut)}`;
+  g += `<polygon points="${P.map(([x, y]) => X(x) + ',' + Y(y)).join(' ')}" fill="${tape}" fill-opacity=".28" stroke="${ink}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  for (let i = 1; i <= nt; i++){ const nx = (i - 1) * tr, ny = i * r; g += `<rect x="${X(nx)}" y="${Y(ny)}" width="${Td * sc}" height="${Math.max(2, thk * sc)}" fill="${steel}"/>`; }
+  g += `<line x1="${X(-tr)}" y1="${Y(0)}" x2="${X(xT)}" y2="${Y(rise)}" stroke="${mut}" stroke-width="1.5" stroke-dasharray="8 6"/>`;
+  const ang = -th * 180 / Math.PI, mx = (X(0) + X((nt - 1) * tr)) / 2, my = (Y(r) + Y(nt * r)) / 2;
+  g += txt(mx + 14 * sn, my - 14 - 30 * cs, `${t('noseLine')}: ${L(n2n)}`, 'middle', ink, ang);
+  const bx = (X(xb) + X(xT)) / 2, by = (Y(0) + Y(yBot(xT))) / 2;
+  g += txt(bx + 20 * sn, by + 34 * cs, `${L(cutLen)}`, 'middle', mut, ang);
+  $('chSvg').innerHTML = g;
+  // enlarged end details
+  function detail(id, x0, x1, y0, y1, extra){
+    const Wd = 440, s2 = Wd / (x1 - x0), Hd = (y1 - y0) * s2, XX = x => (x - x0) * s2, YY = y => Hd - (y - y0) * s2, f2 = 19;
+    const tx = (x, y, s, anc = 'middle', col = ink) => `<text x="${x}" y="${y}" text-anchor="${anc}" font-size="${f2}" font-weight="600" fill="${col}" ${mono}>${s}</text>`;
+    let h = `<polygon points="${P.map(([x, y]) => XX(x) + ',' + YY(y)).join(' ')}" fill="${tape}" fill-opacity=".28" stroke="${ink}" stroke-width="3" stroke-linejoin="round"/>`;
+    h += `<line x1="${XX(-tr)}" y1="${YY(0)}" x2="${XX(xT)}" y2="${YY(rise)}" stroke="${mut}" stroke-width="1.5" stroke-dasharray="8 6"/>`;
+    for (let i = 1; i <= nt; i++){ const nx = (i - 1) * tr, ny = i * r; h += `<rect x="${XX(nx)}" y="${YY(ny)}" width="${Td * s2}" height="${Math.max(2, thk * s2)}" fill="${steel}" fill-opacity=".85"/>`; }
+    h += extra(XX, YY, tx);
+    const el = $(id); el.setAttribute('viewBox', `0 0 ${Wd} ${Hd}`); el.innerHTML = h;
+  }
+  const pad = 7;
+  detail('chBot', -tr - 14, xb + pad, -6, Math.max(yTop(xb), r + thk) + 4, (XX, YY, tx) =>
+    `<line x1="0" y1="${YY(0)}" x2="440" y2="${YY(0)}" stroke="${lineC}" stroke-width="3"/>` +
+    tx(XX(-tr) - 8, YY(a / cs / 2) + 7, L(a / cs), 'end') +
+    tx((XX(-tr) + XX(xb)) / 2, YY(0) + 24, L(xb + tr)) +
+    tx(XX(xb) - 6, YY(0) - 8, nf(th * 180 / Math.PI, 1) + '°', 'end', mut) +
+    `<circle cx="${XX(0)}" cy="${YY(r)}" r="5" fill="${ink}"/>` + tx(XX(0) - 8, YY(r) - 10, t('nose1'), 'end', mut));
+  detail('chTop', xL - 16, xT + 18, yBot(xT) - 4, rise + 6, (XX, YY, tx) =>
+    `<line x1="${XX(xL - 4)}" y1="${YY(rise)}" x2="440" y2="${YY(rise)}" stroke="${lineC}" stroke-width="3"/>` +
+    tx((XX(xL) + XX(xT)) / 2, YY(rise) - 10, L(xT - xL)) +
+    tx(XX(xT) + 8, (YY(rise) + YY(yBot(xT))) / 2 + 7, L(rise - yBot(xT)), 'start') +
+    tx(XX(xT) - 8, YY(yBot(xT)) - 10, nf(90 - th * 180 / Math.PI, 1) + '°', 'end', mut));
+}
+['chSize','chD','chA','chTd','chThk'].forEach(id => $(id).addEventListener('input', stairs));
+['sRise','sMaxR','sTread','sRun','sNose'].forEach(id => $(id).addEventListener('input', stairs));
+['sCode','sTop'].forEach(id => $(id).addEventListener('change', () => { if (id === 'sCode') $('sMaxR').value = fIn(CODE[$('sCode').value].rMax); stairs(); }));
+
+/* ---------- spacing ---------- */
+let mode = 'bal';
+function spacing(){
+  const css = getComputedStyle(document.documentElement); let marks = [], total, w, out = '', checks = '';
+  const box = (k, v) => `<div><span>${t(k)}</span><b>${v}</b></div>`;
+  if (mode === 'bal'){
+    total = len('pLen'); w = len('pW') || 0; const gmax = len('pGap');
+    ['pLen','pGap'].forEach(id => bad(id, len(id) == null)); if (!total || !gmax) return;
+    const n = Math.max(0, Math.ceil((total - gmax) / (w + gmax) - 1e-9)), g = (total - n * w) / (n + 1);
+    out = box('pieces', n) + box('gap', L(g)) + box('cc', L(w + g)) + box('spaces', n + 1);
+    checks = `<span class="pill ${g <= gmax + 1e-6 ? 'ok' : 'bad'}">${g <= gmax + 1e-6 ? '✓' : '✕'} ${t('gapOk')} (${L(gmax)})</span>` + (g < 4 ? `<span class="pill ok">✓ ${t('sphere')}</span>` : `<span class="pill bad">✕ ${t('sphere')}</span>`);
+    for (let i = 0; i < n; i++){ const e = g + i * (w + g); marks.push([e, e + w / 2]); }
+    $('pMarksHint').textContent = t('marksBal');
+  } else {
+    total = len('eLen'); const n = Math.max(1, Math.round(+$('eN').value || 1)); w = len('eW') || 0;
+    bad('eLen', total == null); if (!total) return;
+    const g = (total - (n - 1) * w) / n;
+    out = box('spaces', n) + box('each', L(g)) + box('cc', L(g + w)) + box('pieces', n - 1);
+    for (let i = 1; i < n; i++){ const e = i * g + (i - 1) * w; marks.push([e, e + w / 2]); }
+    $('pMarksHint').textContent = t('marksEq');
+  }
+  $('pOut').innerHTML = out; $('pChecks').innerHTML = checks;
+  $('pTable').innerHTML = marks.map((m, i) => `<tr><td>${i + 1}</td><td>${L(m[0])}</td><td>${L(m[1])}</td></tr>`).join('');
+  const W = 600, sc = (W - 40) / total, ink = css.getPropertyValue('--ink'), tape = css.getPropertyValue('--tape'), mut = css.getPropertyValue('--muted');
+  let s = `<rect x="14" y="20" width="6" height="70" fill="${ink}"/><rect x="${W - 20}" y="20" width="6" height="70" fill="${ink}"/>
+    <line x1="20" y1="30" x2="${W - 20}" y2="30" stroke="${mut}" stroke-width="2"/><line x1="20" y1="82" x2="${W - 20}" y2="82" stroke="${mut}" stroke-width="2"/>`;
+  for (const [e] of marks) s += `<rect x="${20 + e * sc}" y="30" width="${Math.max(2, w * sc)}" height="52" fill="${tape}"/>`;
+  s += `<text x="${W / 2}" y="110" text-anchor="middle" font-size="20" fill="${mut}" font-family="JetBrains Mono, monospace">${L(total)}</text>`;
+  $('pSvg').innerHTML = s;
+}
+['pLen','pW','pGap','eLen','eN','eW'].forEach(id => $(id).addEventListener('input', spacing));
+function setMode(m){ mode = m; $('mBal').setAttribute('aria-pressed', m === 'bal'); $('mEq').setAttribute('aria-pressed', m === 'eq'); $('balFields').hidden = m !== 'bal'; $('eqFields').hidden = m !== 'eq'; spacing(); }
+$('mBal').addEventListener('click', () => setMode('bal')); $('mEq').addEventListener('click', () => setMode('eq'));
+
+/* ---------- angles ---------- */
+let order = ['aRise','aRun'];
+['aRise','aRun','aDiag','aDeg','aPitch','aPct'].forEach(id => $(id).addEventListener('input', () => { order = order.filter(x => x !== id); if ($(id).value.trim()) order.push(id); }));
+function angles(){
+  const val = id => id === 'aDeg' || id === 'aPitch' || id === 'aPct' ? (parseFloat($(id).value) || null) : len(id, 'in');
+  const have = order.filter(id => val(id) != null).slice(-2);
+  if (have.length < 2){ $('aOut').innerHTML = `<div><span>—</span><b style="font-size:14px">${t('need2')}</b></div>`; return; }
+  let rise = null, run = null, diag = null, a = null; const g = Object.fromEntries(have.map(id => [id, val(id)]));
+  if ('aDeg' in g) a = g.aDeg * Math.PI / 180; if ('aPitch' in g) a = Math.atan(g.aPitch / 12); if ('aPct' in g) a = Math.atan(g.aPct / 100);
+  if ('aRise' in g) rise = g.aRise; if ('aRun' in g) run = g.aRun; if ('aDiag' in g) diag = g.aDiag;
+  if (rise != null && run != null){ diag = Math.hypot(rise, run); a = Math.atan2(rise, run); }
+  else if (rise != null && diag != null){ run = Math.sqrt(Math.max(0, diag * diag - rise * rise)); a = Math.asin(Math.min(1, rise / diag)); }
+  else if (run != null && diag != null){ rise = Math.sqrt(Math.max(0, diag * diag - run * run)); a = Math.acos(Math.min(1, run / diag)); }
+  else if (a != null && rise != null){ run = rise / Math.tan(a); diag = rise / Math.sin(a); }
+  else if (a != null && run != null){ rise = run * Math.tan(a); diag = run / Math.cos(a); }
+  else if (a != null && diag != null){ rise = diag * Math.sin(a); run = diag * Math.cos(a); }
+  else { $('aOut').innerHTML = `<div><span>—</span><b style="font-size:14px">${t('need2')}</b></div>`; return; }
+  const deg = a * 180 / Math.PI, box = (k, v) => `<div><span>${t(k)}</span><b>${v}</b></div>`;
+  $('aOut').innerHTML = box('aRise', L(rise)) + box('aRun', L(run)) + box('diag', L(diag)) + box('deg', nf(deg, 2) + '°') + box('comp', nf(90 - deg, 2) + '°') + box('pitch', nf(Math.tan(a) * 12, 3) + ' / 12') + box('pct', nf(Math.tan(a) * 100, 2) + ' %');
+  const css = getComputedStyle(document.documentElement), W = 600, H = 340, pad = 50, sc = Math.min((W - 2 * pad) / run, (H - 2 * pad) / rise), x0 = pad, y0 = H - pad;
+  const ink = css.getPropertyValue('--ink'), tape = css.getPropertyValue('--tape'), mut = css.getPropertyValue('--muted');
+  const X = x0 + run * sc, Y = y0 - rise * sc;
+  $('aSvg').innerHTML = `<path d="M${x0},${y0} L${X},${y0} L${X},${Y} Z" fill="none" stroke="${ink}" stroke-width="2.5"/>
+    <line x1="${x0}" y1="${y0}" x2="${X}" y2="${Y}" stroke="${tape}" stroke-width="5"/>
+    <path d="M${X - 14},${y0} L${X - 14},${y0 - 14} L${X},${y0 - 14}" fill="none" stroke="${mut}"/>
+    <text x="${(x0 + X) / 2}" y="${y0 + 22}" text-anchor="middle" font-size="20" fill="${ink}" font-family="JetBrains Mono, monospace">${L(run)}</text>
+    <text x="${X + 8}" y="${(y0 + Y) / 2}" font-size="20" fill="${ink}" font-family="JetBrains Mono, monospace">${L(rise)}</text>
+    <text x="${(x0 + X) / 2 - 12}" y="${(y0 + Y) / 2 - 10}" text-anchor="end" font-size="20" fill="${ink}" font-family="JetBrains Mono, monospace">${L(diag)}</text>
+    <text x="${x0 + 34}" y="${y0 - 8}" font-size="20" fill="${mut}" font-family="JetBrains Mono, monospace">${nf(deg, 1)}°</text>`;
+}
+$('aGo').addEventListener('click', angles);
+$('aClear').addEventListener('click', () => { ['aRise','aRun','aDiag','aDeg','aPitch','aPct'].forEach(id => $(id).value = ''); order = []; angles(); });
+
+/* ---------- preferences ---------- */
+function fillPrefs(){
+  $('prFmt').innerHTML = Object.entries(FMT).map(([k, o]) => `<option value="${k}" ${k === P.fmt ? 'selected' : ''}>${t(o.lab)}</option>`).join('');
+  $('prDen').value = P.den; $('prBare').value = P.bare; $('prMet').value = P.met; $('prCode').value = P.code; $('prDash').value = P.dash;
+}
+function savePrefs(){
+  P.fmt = $('prFmt').value; P.den = +$('prDen').value; P.bare = $('prBare').value; P.met = +$('prMet').value; P.code = $('prCode').value; P.dash = $('prDash').value;
+  store.set('prefs', P); $('prSaved').textContent = t('saved'); setTimeout(() => $('prSaved').textContent = '', 1500); refresh();
+}
+['prFmt','prDen','prBare','prMet','prCode','prDash'].forEach(id => $(id).addEventListener('change', savePrefs));
+$('prReset').addEventListener('click', () => { const lang = P.lang; P = Object.assign({}, DEF, {lang}); store.set('prefs', P); fillPrefs(); refresh(); });
+
+/* ---------- language + tabs ---------- */
+function applyLang(){
+  document.documentElement.lang = P.lang;
+  document.querySelectorAll('[data-i]').forEach(el => { el.textContent = t(el.dataset.i); });
+  $('lang-es').setAttribute('aria-pressed', P.lang === 'es'); $('lang-en').setAttribute('aria-pressed', P.lang === 'en');
+  const opts = {IBC:['IBC – comercial','IBC – commercial'], IRC:['IRC – residencial','IRC – residential'], OSHA:['OSHA 1910.25 – industrial','OSHA 1910.25 – industrial']};
+  [...$('sCode').options].forEach(o => o.textContent = opts[o.value][P.lang === 'es' ? 0 : 1]);
+  renderKeys(); fillPrefs();
+}
+function setLang(l){ P.lang = l; store.set('prefs', P); applyLang(); refresh(); }
+$('lang-es').addEventListener('click', () => setLang('es')); $('lang-en').addEventListener('click', () => setLang('en'));
+function tab(name){
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
+  ['calc','stairs','space','angle','prefs'].forEach(s => $(s).hidden = s !== name);
+  try { history.replaceState(null, '', '#' + name); } catch(e){}
+  store.set('tab', name); refresh();
+}
+document.querySelector('nav.tabs').addEventListener('click', e => { const b = e.target.closest('button[data-tab]'); if (b) tab(b.dataset.tab); });
+function refresh(){ live(); renderTape(); stairs(); spacing(); angles(); }
+
+/* ---------- start ---------- */
+$('sCode').value = P.code; $('sMaxR').value = fIn(CODE[P.code].rMax);
+applyLang();
+const start = (location.hash || '').slice(1);
+tab(['calc','stairs','space','angle','prefs'].includes(start) ? start : store.get('tab', 'calc'));
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
+</script>
+</body>
+</html>

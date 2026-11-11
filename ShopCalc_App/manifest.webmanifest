@@ -1,0 +1,17 @@
+{
+  "name": "GMC Shop Calc",
+  "short_name": "Shop Calc",
+  "description": "Calculadora de taller: pies, pulgadas, fracciones y métrico; escaleras de acero con larguero de canal; espaciado de barrotes; ángulos.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#e9e8e3",
+  "theme_color": "#1d1f22",
+  "lang": "es",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
