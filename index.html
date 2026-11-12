@@ -277,7 +277,7 @@ const T = {
   marksBal:'Marca la orilla izquierda de cada barrote, midiendo desde la cara del poste izquierdo.',marksEq:'Marcas medidas desde el inicio. Con ancho de pieza, la orilla es la marca y el centro está a la mitad.',
   diag:'Diagonal',deg:'Ángulo',comp:'Complemento',pitch:'Pendiente',pct:'Pendiente %',need2:'Escribe al menos dos datos.',
   errNum:'No entiendo esta expresión. Revisa los números y las unidades.',errDim:'No se puede sumar una medida con un área.',errDiv:'División entre cero.',
-  fmtFt:'Pies-pulg-fracción',fmtIn:'Pulgadas-fracción',fmtDf:'Pies decimales',fmtMm:'Milímetros',fmtCm:'Centímetros',fmtM:'Metros',area:'Área',vol:'Volumen',num:'Número'},
+  fmtAuto:'Automático (pulgadas si escribes pulgadas)',fmtFt:'Pies-pulg-fracción',fmtIn:'Pulgadas-fracción',fmtDf:'Pies decimales',fmtMm:'Milímetros',fmtCm:'Centímetros',fmtM:'Metros',area:'Área',vol:'Volumen',num:'Número'},
  en:{tCalc:'Calculator',tStairs:'Stairs',tSpace:'Spacing',tAngle:'Angles',tPrefs:'Settings',tape:'Tape',clear:'Clear',reset:'Reset to defaults',
   calcHint:'Examples: 12\' 6 1/2"  ·  12\'-6-1/2"  ·  150mm  ·  2.4m  ·  10\' × 12\' (area)  ·  ( 8\' + 6" ) ÷ 4. On a computer keyboard, / inside a number is a fraction; to divide use ÷ or " / " with spaces.',
   tapeHint:'Tap a line to reuse that result.',sRise:'Total rise (floor to floor)',sMaxR:'Max riser',sTread:'Tread (run per step)',sRun:'Total run available (optional)',sNose:'Nosing',sCode:'Code',sTop:'Top',
@@ -294,10 +294,11 @@ const T = {
   marksBal:'Mark the left edge of each picket, measured from the face of the left post.',marksEq:'Marks measured from the start. With a piece width, the mark is the edge and the center is half a width further.',
   diag:'Diagonal',deg:'Angle',comp:'Complement',pitch:'Pitch',pct:'Slope %',need2:'Enter at least two values.',
   errNum:'I can\'t read this expression. Check the numbers and units.',errDim:'You can\'t add a length to an area.',errDiv:'Division by zero.',
-  fmtFt:'Feet-inch-fraction',fmtIn:'Inch-fraction',fmtDf:'Decimal feet',fmtMm:'Millimeters',fmtCm:'Centimeters',fmtM:'Meters',area:'Area',vol:'Volume',num:'Number'}
+  fmtAuto:'Automatic (inches if you type inches)',fmtFt:'Feet-inch-fraction',fmtIn:'Inch-fraction',fmtDf:'Decimal feet',fmtMm:'Millimeters',fmtCm:'Centimeters',fmtM:'Meters',area:'Area',vol:'Volume',num:'Number'}
 };
-const DEF = {lang:'es', fmt:'ft', den:16, bare:'in', met:1, code:'IBC', dash:'space'};
+const DEF = {lang:'es', fmt:'auto', den:16, bare:'in', met:1, code:'IBC', dash:'space'};
 let P = Object.assign({}, DEF, store.get('prefs', {}));
+if (!P.v2){ P.fmt = 'auto'; P.v2 = 1; store.set('prefs', P); }   // new default: show inches when you type inches
 const t = k => (T[P.lang] && T[P.lang][k]) || T.es[k] || k;
 
 /* ---------- length math (internal unit: inch) ---------- */
@@ -312,19 +313,23 @@ function fIn(x){ const s = x < 0 ? '-' : ''; const [w, f, d] = frac(Math.abs(x))
 function fFt(x){
   const s = x < 0 ? '-' : ''; let [w, f, d] = frac(Math.abs(x));
   const ft = Math.floor(w / 12), inch = w % 12;
-  const ins = (inch || !f ? inch : '') + (f ? (inch ? (P.dash === 'dash' ? ' ' : '-') : '') + f + '/' + d : '') + '"';
+  const showZero = ft > 0;
+  const ins = (inch || !f || showZero ? inch : '') + (f ? (inch || showZero ? (P.dash === 'dash' ? ' ' : '-') : '') + f + '/' + d : '') + '"';
   if (!ft) return s + ins;
   return s + ft + "'" + (P.dash === 'dash' ? '-' : ' ') + ins;
 }
 const nf = (v, dp) => v.toLocaleString(P.lang === 'es' ? 'es-MX' : 'en-US', {minimumFractionDigits:dp, maximumFractionDigits:dp});
 const FMT = {
-  ft:{lab:'fmtFt', f:fFt}, in:{lab:'fmtIn', f:fIn},
+  auto:{lab:'fmtAuto', f:fFt}, ft:{lab:'fmtFt', f:fFt}, in:{lab:'fmtIn', f:fIn},
   df:{lab:'fmtDf', f:x => nf(x / 12, 3) + ' ft'},
   mm:{lab:'fmtMm', f:x => nf(x * 25.4, P.met) + ' mm'},
   cm:{lab:'fmtCm', f:x => nf(x * 2.54, Math.max(P.met, 1)) + ' cm'},
   m:{lab:'fmtM', f:x => nf(x * 0.0254, 3) + ' m'}
 };
 const L = (x, k) => (FMT[k || P.fmt] || FMT.ft).f(x);
+// Automatic: if no feet were typed, show the answer in inches; otherwise feet-inches
+let autoKey = 'ft';
+const keyFor = s => P.fmt !== 'auto' ? P.fmt : (/'|ft\b/.test(prep(s || '')) ? 'ft' : 'in');
 
 /* ---------- expression parser ---------- */
 function prep(s){
@@ -376,8 +381,10 @@ function parse(s){
       const n = peek(), nx = tk[p + 1];
       if (nx && nx.t === 'u' && U[nx.v] < U[lastU]){ p += 2; tot += n.v * U[nx.v]; lastU = nx.v; continue; }
       if ((lastU === "'" || lastU === 'ft') && !(nx && nx.t === 'u')){ p += 1; tot += n.v; lastU = '"'; continue; }
-      // 16" 12  -> read as 16' 12" (first mark typed as inches by mistake, a plain number follows)
-      if (lastU === '"' && tot === k.v && !(nx && nx.t === 'u')){ p += 1; tot = k.v * 12 + n.v; lastU = '"'; continue; }
+      // 5" 1/16  or  5" 1/16"  -> 5-1/16" (fraction typed after the inch mark)
+      if (lastU === '"' && n.v < 1 && (!nx || nx.t !== 'u' || nx.v === '"')){ p += (nx && nx.t === 'u') ? 2 : 1; tot += n.v; continue; }
+      // 16" 12  -> read as 16' 12" (first mark typed as inches by mistake, a whole number follows)
+      if (lastU === '"' && tot === k.v && n.v >= 1 && !(nx && nx.t === 'u')){ p += 1; tot = k.v * 12 + n.v; lastU = '"'; continue; }
       break;
     }
     return {v:tot, d:1};
@@ -385,7 +392,7 @@ function parse(s){
   const r = expr(); if (p < tk.length) throw new Error('errNum'); return r;
 }
 function show(r){ // -> {main, conv:[[key,text]]}
-  if (r.d === 1) return {main:L(r.v), conv:Object.keys(FMT).map(k => [k, L(r.v, k)])};
+  if (r.d === 1) return {main:L(r.v), conv:Object.keys(FMT).filter(k => k !== 'auto').map(k => [k, L(r.v, k)])};
   if (r.d === 0) return {main:r.v.toLocaleString(P.lang === 'es' ? 'es-MX' : 'en-US', {maximumFractionDigits:6}), conv:[]};
   if (r.d === 2) return {main:nf(r.v / 144, 2) + ' ft²', conv:[['', nf(r.v, 1) + ' in²'], ['', nf(r.v * 0.00064516, 3) + ' m²']]};
   if (r.d === 3) return {main:nf(r.v / 1728, 2) + ' ft³', conv:[['', nf(r.v / 46656, 3) + ' yd³'], ['', nf(r.v * 1.6387e-5, 3) + ' m³']]};
@@ -410,7 +417,7 @@ function lastOp(str){ // last top-level operation and its right-hand value, for 
   if (!hit) return null;
   try { return {op:hit.v, b:parse(ps.slice(hit.p + 1))}; } catch(e){ return null; }
 }
-const resText = r => r.d === 1 ? L(r.v) : r.d === 0 ? String(+r.v.toFixed(6)) : show(r).main;
+const resText = r => r.d === 1 ? L(r.v, autoKey) : r.d === 0 ? String(+r.v.toFixed(6)) : show(r).main;
 const bText = b => b.d === 1 ? L(b.v) : String(+b.v.toFixed(6));
 const KEYS = [['C','fn','clr'],['(','op'],[')','op'],['⌫','fn','bk'],['÷','op'],
   ['7'],['8'],['9'],["Pie '",'u',"' "],['×','op',' × '],
@@ -425,9 +432,11 @@ function insert(s){ if (shown && expr.value.trim() === shown && /^[\d.(]/.test(s
 function live(){
   const s = expr.value.trim(); $('err').textContent = '';
   if (!s){ $('res').textContent = '—'; $('conv').innerHTML = ''; return null; }
-  try { const r = parse(subst(s)); const o = show(r);
+  try { let r = parse(subst(s)); if (r.d === 0 && /\d\/\d/.test(s)) r = {v:r.v * U[P.bare], d:1};   // 5 1/16 + 7 5/8 -> inches
+    const o = show(r);
+    autoKey = keyFor(s); if (r.d === 1) o.main = L(r.v, autoKey);
     $('res').textContent = convSel && r.d === 1 ? L(r.v, convSel) : o.main;
-    $('conv').innerHTML = o.conv.map(([k, x]) => `<button type="button" data-k="${k}" aria-pressed="${k && (convSel || P.fmt) === k}">${x}</button>`).join('');
+    $('conv').innerHTML = o.conv.map(([k, x]) => `<button type="button" data-k="${k}" aria-pressed="${k && (convSel || autoKey) === k}">${x}</button>`).join('');
     return r;
   } catch(e){ $('res').textContent = '…'; $('err').textContent = t(e.message) || t('errNum'); $('conv').innerHTML = ''; return null; }
 }
