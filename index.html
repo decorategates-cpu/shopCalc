@@ -1,17 +1,5 @@
-<!doctype html>
-<html lang="es">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#1d1f22">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>GMC Shop Calculator</title>
-<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font-size:14px}</style>
-</head>
-<body>
-
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -276,7 +264,7 @@ const T = {
   pieces:'Barrotes',gap:'Espacio libre',cc:'Centro a centro',spaces:'Espacios',each:'Cada espacio',gapOk:'Espacio ≤ máximo',sphere:'Regla de la esfera de 4"',
   marksBal:'Marca la orilla izquierda de cada barrote, midiendo desde la cara del poste izquierdo.',marksEq:'Marcas medidas desde el inicio. Con ancho de pieza, la orilla es la marca y el centro está a la mitad.',
   diag:'Diagonal',deg:'Ángulo',comp:'Complemento',pitch:'Pendiente',pct:'Pendiente %',need2:'Escribe al menos dos datos.',
-  errNum:'No entiendo esta expresión. Revisa los números y las unidades.',errDim:'No se puede sumar una medida con un área.',errDiv:'División entre cero.',
+  errNum:'No entiendo esta expresión. Revisa los números y las unidades.',errDim:'No se puede sumar una medida con un área.',errDiv:'División entre cero.',pcs:'{n} piezas de {b} · sobran {r}',
   fmtAuto:'Automático (pulgadas si escribes pulgadas)',fmtFt:'Pies-pulg-fracción',fmtIn:'Pulgadas-fracción',fmtDf:'Pies decimales',fmtMm:'Milímetros',fmtCm:'Centímetros',fmtM:'Metros',area:'Área',vol:'Volumen',num:'Número'},
  en:{tCalc:'Calculator',tStairs:'Stairs',tSpace:'Spacing',tAngle:'Angles',tPrefs:'Settings',tape:'Tape',clear:'Clear',reset:'Reset to defaults',
   calcHint:'Examples: 12\' 6 1/2"  ·  12\'-6-1/2"  ·  150mm  ·  2.4m  ·  10\' × 12\' (area)  ·  ( 8\' + 6" ) ÷ 4. On a computer keyboard, / inside a number is a fraction; to divide use ÷ or " / " with spaces.',
@@ -293,7 +281,7 @@ const T = {
   pieces:'Pickets',gap:'Clear gap',cc:'Center to center',spaces:'Spaces',each:'Each space',gapOk:'Gap ≤ max',sphere:'4" sphere rule',
   marksBal:'Mark the left edge of each picket, measured from the face of the left post.',marksEq:'Marks measured from the start. With a piece width, the mark is the edge and the center is half a width further.',
   diag:'Diagonal',deg:'Angle',comp:'Complement',pitch:'Pitch',pct:'Slope %',need2:'Enter at least two values.',
-  errNum:'I can\'t read this expression. Check the numbers and units.',errDim:'You can\'t add a length to an area.',errDiv:'Division by zero.',
+  errNum:'I can\'t read this expression. Check the numbers and units.',errDim:'You can\'t add a length to an area.',errDiv:'Division by zero.',pcs:'{n} pieces of {b} · {r} left over',
   fmtAuto:'Automatic (inches if you type inches)',fmtFt:'Feet-inch-fraction',fmtIn:'Inch-fraction',fmtDf:'Decimal feet',fmtMm:'Millimeters',fmtCm:'Centimeters',fmtM:'Meters',area:'Area',vol:'Volume',num:'Number'}
 };
 const DEF = {lang:'es', fmt:'auto', den:16, bare:'in', met:1, code:'IBC', dash:'space'};
@@ -354,6 +342,8 @@ function tokenize(s){
     m = s.slice(i).match(/^(mm|cm|ft|in|yd|m)\b/) || s.slice(i).match(/^['"]/);
     if (m){ out.push({t:'u', v:m[0], p:i}); i += m[0].length; continue; }
     if ('+-*÷()'.includes(c)){ out.push({t:'o', v:c, p:i}); i++; continue; }
+    if (c === '/'){ out.push({t:'o', v:'÷', p:i}); i++; continue; }
+    if (c === '%'){ out.push({t:'o', v:'%', p:i}); i++; continue; }   // 38'/28" -> divide
     throw new Error('errNum');
   }
   return out;
@@ -366,11 +356,14 @@ function parse(s){
     if (a.d === 0 && b.d === 1) a = bare(a.v); if (b.d === 0 && a.d === 1) b = bare(b.v);
     if (a.d !== b.d) throw new Error('errDim'); return {v:a.v + sgn * b.v, d:a.d};
   }
-  function expr(){ let a = term(); while (peek() && peek().t === 'o' && '+-'.includes(peek().v)){ const o = eat().v; a = add(a, term(), o === '+' ? 1 : -1); } return a; }
+  // 1987 + 20% -> 1987 + 20% of 1987 (like a regular calculator)
+  const pctOf = (a, b) => b.pct ? {v:a.v * b.v, d:a.d} : b;
+  function expr(){ let a = term(); while (peek() && peek().t === 'o' && '+-'.includes(peek().v)){ const o = eat().v; a = add(a, pctOf(a, term()), o === '+' ? 1 : -1); } return a; }
   function term(){ let a = unary(); while (peek() && peek().t === 'o' && '*÷'.includes(peek().v)){ const o = eat().v; const b = unary();
       if (o === '*') a = {v:a.v * b.v, d:a.d + b.d}; else { if (!b.v) throw new Error('errDiv'); a = {v:a.v / b.v, d:a.d - b.d}; } } return a; }
   function unary(){ if (peek() && peek().t === 'o' && peek().v === '-'){ eat(); const a = unary(); return {v:-a.v, d:a.d}; } if (peek() && peek().t === 'o' && peek().v === '+'){ eat(); } return prim(); }
-  function prim(){
+  function prim(){ const r = prim0(); if (peek() && peek().t === 'o' && peek().v === '%'){ eat(); return {v:r.v / 100, d:r.d, pct:true}; } return r; }
+  function prim0(){
     const k = peek(); if (!k) throw new Error('errNum');
     if (k.t === 'o' && k.v === '('){ eat(); const a = expr(); if (!peek() || peek().v !== ')') throw new Error('errNum'); eat(); return a; }
     if (k.t !== 'n') throw new Error('errNum');
@@ -413,7 +406,7 @@ function combine(a, op, b){
 function lastOp(str){ // last top-level operation and its right-hand value, for repeated "="
   const ps = prep(str), tk = tokenize(ps); let depth = 0, hit = null;
   tk.forEach((k, i) => { if (k.v === '(') depth++; else if (k.v === ')') depth--;
-    else if (!depth && k.t === 'o' && '+-*÷'.includes(k.v) && i > 0 && !(tk[i - 1].t === 'o' && tk[i - 1].v !== ')')) hit = k; });
+    else if (!depth && k.t === 'o' && '+-*÷'.includes(k.v) && i > 0 && !(tk[i - 1].t === 'o' && tk[i - 1].v !== ')' && tk[i - 1].v !== '%')) hit = k; });
   if (!hit) return null;
   try { return {op:hit.v, b:parse(ps.slice(hit.p + 1))}; } catch(e){ return null; }
 }
@@ -429,14 +422,22 @@ function renderKeys(){
   $('keys').innerHTML = KEYS.map(([l, c, v]) => `<button type="button" class="${c || ''}" data-v="${(v ?? l).replace(/"/g,'&quot;')}">${P.lang === 'en' ? l.replace('Pie','Ft').replace('Pulg','In').replace('esp','spc') : l}</button>`).join('');
 }
 function insert(s){ if (shown && expr.value.trim() === shown && /^[\d.(]/.test(s)){ expr.value = ''; shown = null; repOp = null; } const a = expr.selectionStart ?? expr.value.length, b = expr.selectionEnd ?? a; expr.value = expr.value.slice(0, a) + s + expr.value.slice(b); const c = a + s.length; expr.setSelectionRange(c, c); live(); }
+let lastPcs = null;
 function live(){
-  const s = expr.value.trim(); $('err').textContent = '';
+  const s = expr.value.trim(); $('err').textContent = ''; lastPcs = null;
   if (!s){ $('res').textContent = '—'; $('conv').innerHTML = ''; return null; }
-  try { let r = parse(subst(s)); if (r.d === 0 && /\d\/\d/.test(s)) r = {v:r.v * U[P.bare], d:1};   // 5 1/16 + 7 5/8 -> inches
+  try { let r = parse(subst(s)); if (r.d === 0 && /\d\/\d/.test(s) && !/['"]|\d\s*(mm|cm|m|ft|in|yd)\b/.test(prep(s))) r = {v:r.v * U[P.bare], d:1};   // 5 1/16 + 7 5/8 -> inches
     const o = show(r);
     autoKey = keyFor(s); if (r.d === 1) o.main = L(r.v, autoKey);
     $('res').textContent = convSel && r.d === 1 ? L(r.v, convSel) : o.main;
     $('conv').innerHTML = o.conv.map(([k, x]) => `<button type="button" data-k="${k}" aria-pressed="${k && (convSel || autoKey) === k}">${x}</button>`).join('');
+    if (r.d === 0 && r.v > 0){ let lo = null; try { lo = lastOp(subst(s)); } catch(e){}
+      if (lo && lo.op === '÷' && lo.b.d === 1 && lo.b.v > 0){
+        const n = Math.floor(r.v + 1e-9), rem = Math.max(0, r.v * lo.b.v - n * lo.b.v), ln = v => L(v, v >= 12 && Math.abs(v % 12) < 1e-9 ? 'ft' : 'in');
+        $('res').textContent = nf(r.v, 2);
+        lastPcs = { v: r.v };
+        $('conv').innerHTML = `<span style="font-weight:600;padding:6px 2px">${t('pcs').replace('{n}', n).replace('{b}', ln(lo.b.v)).replace('{r}', rem < 1/32 ? '0"' : L(rem, 'in'))}</span>`;
+      } }
     return r;
   } catch(e){ $('res').textContent = '…'; $('err').textContent = t(e.message) || t('errNum'); $('conv').innerHTML = ''; return null; }
 }
@@ -458,7 +459,9 @@ function equals(){
     }
   } catch(e){ $('err').textContent = t(e.message) || t('errNum'); return; }
   last = r; tapeData.unshift({e:label, v:r.v, d:r.d}); tapeData = tapeData.slice(0, 60); store.set('tape', tapeData); renderTape();
-  shown = resText(r); expr.value = shown; live(); const n = expr.value.length; try { expr.setSelectionRange(n, n); } catch(e){}
+  const pcs = lastPcs && Math.abs(lastPcs.v - r.v) < 1e-9 ? [$('res').textContent, $('conv').innerHTML] : null;
+  shown = resText(r); expr.value = shown; live();
+  if (pcs){ $('res').textContent = pcs[0]; $('conv').innerHTML = pcs[1]; } const n = expr.value.length; try { expr.setSelectionRange(n, n); } catch(e){}
 }
 function renderTape(){
   $('tapeList').innerHTML = tapeData.map((x, i) => `<li data-i="${i}" tabindex="0"><span>${x.e.replace(/</g,'&lt;')}</span><span>${show(x).main}</span></li>`).join('') || `<li style="cursor:default"><span>—</span><span></span></li>`;
@@ -470,7 +473,7 @@ $('keys').addEventListener('click', e => {
   else if (v === 'eq') equals();
   else if (v === 'ans') insert('ans ');
   else if (v === 'area'){ const r = live(); if (r && r.d === 1){ /* square the length */ expr.value = `(${expr.value}) × (${expr.value})`; live(); } }
-  else if (v === 'pct') insert(' × 0.01');
+  else if (v === 'pct') insert('%');
   else insert(v);
   expr.focus({preventScroll:true});
 });
@@ -684,8 +687,4 @@ tab(['calc','stairs','space','angle','prefs'].includes(start) ? start : store.ge
 })();
 </script>
 
-<script>
-if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); }); }
-</script>
-</body>
-</html>
+</body></html>
